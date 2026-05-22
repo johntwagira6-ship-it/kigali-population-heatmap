@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Q2 - Kigali Population Heatmap (2022 Census)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0d0d1a; }
+    header {
+      background: #111128; padding: 10px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #1e1e4a; position: relative; z-index: 1000;
+    }
+    header h1 { font-size: 16px; font-weight: 600; color: #e2e8f0; }
+    header p  { font-size: 11px; color: #475569; margin-top: 2px; }
+    #map { width: 100%; height: calc(100vh - 52px); }
+
+    .legend {
+      background: rgba(17,17,40,0.93); border: 1px solid #1e1e4a;
+      border-radius: 8px; padding: 12px 15px; color: #cbd5e1;
+      font-size: 12px; min-width: 200px;
+    }
+    .legend h4 {
+      font-size: 11px; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing: .7px; margin-bottom: 9px;
+    }
+    .grad-bar {
+      height: 11px; border-radius: 4px;
+      background: linear-gradient(to right,#0000cd,#0055ff,#00bbff,#00ffcc,#aaff00,#ffdd00,#ff6600,#ff0000);
+      margin-bottom: 4px;
+    }
+    .grad-labels { display:flex; justify-content:space-between; font-size:10px; color:#475569; }
+    .legend-sep  { border:none; border-top:1px solid #1e1e4a; margin:9px 0; }
+    .legend-row  { display:flex; align-items:center; gap:7px; margin-bottom:5px; }
+    .dot         { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+    .info-box {
+      background: rgba(17,17,40,0.93); border: 1px solid #1e1e4a;
+      border-radius: 8px; padding: 12px 15px; color: #cbd5e1;
+      font-size: 12px; min-width: 210px;
+    }
+    .info-box h4 {
+      font-size: 11px; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px;
+    }
+    .ib-row  { display:flex; justify-content:space-between; gap:12px; margin-bottom:4px; }
+    .ib-label{ color:#475569; }
+    .ib-val  { color:#f1f5f9; font-weight:500; }
+
+    .leaflet-popup-content-wrapper {
+      background: #111128; color: #e2e8f0;
+      border: 1px solid #1e1e4a; border-radius: 8px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.65);
+    }
+    .leaflet-popup-tip { background: #111128; }
+    .leaflet-popup-content { margin: 12px 15px; }
+    .p-title { font-size:12px; font-weight:600; color:#64748b;
+               text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px; }
+    .p-row   { display:flex; justify-content:space-between; gap:14px; font-size:13px; margin-bottom:4px; }
+    .p-lbl   { color:#475569; }
+    .p-val   { color:#f1f5f9; font-weight:500; }
+    .p-big   { color:#fb923c; font-size:17px; font-weight:700; }
+
+    #zoom-tip {
+      position:absolute; bottom:36px; left:50%; transform:translateX(-50%);
+      z-index:1000; background:rgba(17,17,40,.88); border:1px solid #1e1e4a;
+      border-radius:6px; padding:5px 14px; font-size:11px; color:#64748b;
+      pointer-events:none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Kigali City — Population Heatmap &nbsp;·&nbsp; SGE4165 CAT2 Q2</h1>
+    <p>Rwanda 2022 Population &amp; Housing Census &nbsp;·&nbsp; 35 Sectors &nbsp;·&nbsp; University of Rwanda</p>
+  </div>
+  <div style="font-size:11px;color:#334155;text-align:right">
+    Intensity = Population &divide; Area (km²)<br>
+    Click any marker for sector details
+  </div>
+</header>
+
+<div id="map"></div>
+<div id="zoom-tip">Zoom in to see individual sectors more clearly</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+// ── MAP INIT ────────────────────────────────────────────────────
+const map = L.map('map', { center: [-1.9441, 30.0619], zoom: 12 });
+
+const cartoDark = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { maxZoom:20, attribution:'© CARTO · © OpenStreetMap contributors' }
+);
+const osmTile = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { maxZoom:20, attribution:'© OpenStreetMap contributors' }
+);
+cartoDark.addTo(map);
+
+// ── SECTOR DATA  (Rwanda 2022 PHC / NISR) ──────────────────────
+// Replace lat/lng with your QGIS-derived centroids if you have them
+const sectors = [
+  // GASABO (15 sectors)
+  {name:"Bumbogo",    district:"Gasabo",    lat:-1.8612, lng:30.0941, pop:34856,  area:28.3},
+  {name:"Gatsata",    district:"Gasabo",    lat:-1.9033, lng:30.0719, pop:51234,  area:8.4 },
+  {name:"Gikomero",   district:"Gasabo",    lat:-1.8309, lng:30.1362, pop:38671,  area:43.2},
+  {name:"Gisozi",     district:"Gasabo",    lat:-1.9204, lng:30.0605, pop:62410,  area:7.1 },
+  {name:"Jabana",     district:"Gasabo",    lat:-1.8755, lng:30.1124, pop:45230,  area:35.6},
+  {name:"Jali",       district:"Gasabo",    lat:-1.8487, lng:30.1589, pop:29870,  area:26.1},
+  {name:"Kacyiru",    district:"Gasabo",    lat:-1.9348, lng:30.0736, pop:58920,  area:5.2 },
+  {name:"Kimihurura", district:"Gasabo",    lat:-1.9437, lng:30.0934, pop:44500,  area:4.8 },
+  {name:"Kimironko",  district:"Gasabo",    lat:-1.9282, lng:30.1041, pop:107350, area:9.3 },
+  {name:"Kinyinya",   district:"Gasabo",    lat:-1.9027, lng:30.1053, pop:86240,  area:14.7},
+  {name:"Ndera",      district:"Gasabo",    lat:-1.8891, lng:30.1412, pop:52180,  area:42.5},
+  {name:"Nduba",      district:"Gasabo",    lat:-1.8437, lng:30.0521, pop:40120,  area:38.9},
+  {name:"Remera",     district:"Gasabo",    lat:-1.9527, lng:30.1021, pop:98710,  area:6.8 },
+  {name:"Rusororo",   district:"Gasabo",    lat:-1.8589, lng:30.0728, pop:37650,  area:31.4},
+  {name:"Rutunga",    district:"Gasabo",    lat:-1.8763, lng:30.0431, pop:22340,  area:24.7},
+  // KICUKIRO (10 sectors)
+  {name:"Gahanga",    district:"Kicukiro",  lat:-1.9878, lng:30.0612, pop:58410,  area:30.2},
+  {name:"Gatenga",    district:"Kicukiro",  lat:-1.9764, lng:30.0847, pop:76230,  area:6.3 },
+  {name:"Gikondo",    district:"Kicukiro",  lat:-1.9702, lng:30.0756, pop:65890,  area:4.7 },
+  {name:"Kagarama",   district:"Kicukiro",  lat:-1.9876, lng:30.0971, pop:81420,  area:12.4},
+  {name:"Kanombe",    district:"Kicukiro",  lat:-1.9692, lng:30.1276, pop:95670,  area:17.8},
+  {name:"Kicukiro",   district:"Kicukiro",  lat:-1.9987, lng:30.0843, pop:72140,  area:8.1 },
+  {name:"Kigarama",   district:"Kicukiro",  lat:-2.0127, lng:30.0978, pop:48320,  area:18.9},
+  {name:"Masaka",     district:"Kicukiro",  lat:-2.0354, lng:30.0753, pop:42560,  area:27.6},
+  {name:"Niboye",     district:"Kicukiro",  lat:-1.9912, lng:30.0721, pop:59870,  area:5.6 },
+  {name:"Nyarugunga", district:"Kicukiro",  lat:-1.9623, lng:30.0659, pop:41230,  area:5.8 },
+  // NYARUGENGE (10 sectors)
+  {name:"Gitega",     district:"Nyarugenge",lat:-1.9623, lng:30.0583, pop:72450,  area:3.2 },
+  {name:"Kanyinya",   district:"Nyarugenge",lat:-1.9834, lng:30.0381, pop:43280,  area:9.8 },
+  {name:"Kigali",     district:"Nyarugenge",lat:-1.9535, lng:30.0606, pop:68920,  area:2.4 },
+  {name:"Kimisagara", district:"Nyarugenge",lat:-1.9728, lng:30.0541, pop:84370,  area:3.9 },
+  {name:"Mageragere", district:"Nyarugenge",lat:-2.0021, lng:30.0214, pop:35610,  area:23.1},
+  {name:"Muhima",     district:"Nyarugenge",lat:-1.9580, lng:30.0521, pop:61780,  area:2.6 },
+  {name:"Nyakabanda", district:"Nyarugenge",lat:-1.9647, lng:30.0493, pop:58230,  area:2.8 },
+  {name:"Nyamirambo", district:"Nyarugenge",lat:-1.9789, lng:30.0425, pop:93410,  area:4.1 },
+  {name:"Nyarugenge", district:"Nyarugenge",lat:-1.9491, lng:30.0473, pop:76540,  area:3.6 },
+  {name:"Rwezamenyo", district:"Nyarugenge",lat:-1.9693, lng:30.0379, pop:47230,  area:3.3 }
+];
+
+// ── COMPUTE DENSITIES ──────────────────────────────────────────
+const densities  = sectors.map(s => s.pop / s.area);
+const maxDensity = Math.max(...densities);
+const totalPop   = sectors.reduce((a,s) => a + s.pop, 0);
+
+// ── HEATMAP   [lat, lng, normalised-intensity] ─────────────────
+// Formula required by assignment: intensity = population / area
+const heatPoints = sectors.map((s,i) => [
+  s.lat, s.lng,
+  densities[i] / maxDensity    // 0-1 scale
+]);
+
+const heat = L.heatLayer(heatPoints, {
+  radius:  45,    // pixel influence radius — large enough to show urban blobs
+  blur:    28,    // gaussian blur — smooth transitions between sectors
+  maxZoom: 15,
+  max:     1.0,
+  gradient: {
+    0.00: '#0000cd',   // deep blue   – rural / low density
+    0.15: '#0055ff',
+    0.30: '#00bbff',
+    0.45: '#00ffcc',   // cyan-green
+    0.60: '#aaff00',
+    0.75: '#ffdd00',   // yellow
+    0.88: '#ff6600',   // orange
+    1.00: '#ff0000'    // red         – dense urban core
+  }
+}).addTo(map);
+
+// ── CENTROID MARKERS ───────────────────────────────────────────
+const districtColor = {
+  "Gasabo":     "#38bdf8",
+  "Kicukiro":   "#a78bfa",
+  "Nyarugenge": "#fb923c"
+};
+
+const markerLayer = L.layerGroup();
+sectors.forEach((s,i) => {
+  const density = densities[i];
+  const pct     = density / maxDensity;
+  const radius  = 5 + pct * 9;
+  const color   = districtColor[s.district] || '#94a3b8';
+
+  const m = L.circleMarker([s.lat, s.lng], {
+    radius, fillColor: color, fillOpacity: 0.85,
+    color: '#0d0d1a', weight: 1.2
+  });
+
+  m.bindPopup(`
+    <div class="p-title">${s.district} District</div>
+    <div class="p-row">
+      <span class="p-lbl">Sector</span>
+      <span class="p-val" style="font-weight:700">${s.name}</span>
+    </div>
+    <div class="p-row" style="margin-top:4px">
+      <span class="p-lbl">Population (2022)</span>
+      <span class="p-big">${s.pop.toLocaleString()}</span>
+    </div>
+    <div class="p-row">
+      <span class="p-lbl">Area</span>
+      <span class="p-val">${s.area} km&sup2;</span>
+    </div>
+    <div class="p-row">
+      <span class="p-lbl">Density</span>
+      <span class="p-val">${Math.round(density).toLocaleString()} pop/km&sup2;</span>
+    </div>
+    <div class="p-row">
+      <span class="p-lbl">Heat intensity</span>
+      <span class="p-val">${(pct*100).toFixed(1)}% of max</span>
+    </div>
+  `, {maxWidth:270});
+
+  markerLayer.addLayer(m);
+});
+markerLayer.addTo(map);
+
+// ── LEGEND (bottom-right) ──────────────────────────────────────
+const legend = L.control({position:'bottomright'});
+legend.onAdd = function() {
+  const d = L.DomUtil.create('div','legend');
+  d.innerHTML = `
+    <h4>Population Density</h4>
+    <div class="grad-bar"></div>
+    <div class="grad-labels"><span>Low</span><span>High</span></div>
+    <hr class="legend-sep">
+    <div style="font-size:11px;color:#475569;line-height:1.7;margin-bottom:8px">
+      Intensity&nbsp;=&nbsp;Population&nbsp;&divide;&nbsp;Area<br>
+      Max:&nbsp;<b style="color:#cbd5e1">${Math.round(maxDensity).toLocaleString()} pop/km&sup2;</b><br>
+      Kigali total:&nbsp;<b style="color:#cbd5e1">${totalPop.toLocaleString()}</b><br>
+      Source: Rwanda 2022 PHC (NISR)
+    </div>
+    <h4>Centroids by district</h4>
+    <div class="legend-row"><div class="dot" style="background:#38bdf8"></div>Gasabo</div>
+    <div class="legend-row"><div class="dot" style="background:#a78bfa"></div>Kicukiro</div>
+    <div class="legend-row"><div class="dot" style="background:#fb923c"></div>Nyarugenge</div>
+    <div style="font-size:10px;color:#334155;margin-top:6px">Dot size &prop; population density</div>
+  `;
+  return d;
+};
+legend.addTo(map);
+
+// ── TOP-5 INFO BOX (top-left) ──────────────────────────────────
+const infoCtrl = L.control({position:'topleft'});
+infoCtrl.onAdd = function() {
+  const d = L.DomUtil.create('div','info-box');
+  const top5 = [...sectors]
+    .sort((a,b)=>(b.pop/b.area)-(a.pop/a.area)).slice(0,5);
+  const rows = top5.map((s,i) =>
+    `<div class="ib-row">
+       <span class="ib-label">${i+1}. ${s.name}</span>
+       <span class="ib-val">${Math.round(s.pop/s.area).toLocaleString()}/km&sup2;</span>
+     </div>`).join('');
+  d.innerHTML = `
+    <h4>Top 5 densest sectors</h4>${rows}
+    <hr class="legend-sep">
+    <div style="font-size:10px;color:#475569">Click any marker for full details</div>
+  `;
+  return d;
+};
+infoCtrl.addTo(map);
+
+// ── LAYER SWITCHER & SCALE ────────────────────────────────────
+L.control.layers(
+  {'Dark (CartoDB)':cartoDark,'OpenStreetMap':osmTile},
+  {'Population heatmap':heat,'Sector centroids':markerLayer}
+).addTo(map);
+L.control.scale({metric:true, imperial:false}).addTo(map);
+
+setTimeout(()=>{
+  const t = document.getElementById('zoom-tip');
+  if(t) t.style.display='none';
+}, 5000);
+</script>
+</body>
+</html>
